@@ -1,4 +1,4 @@
-# Name
+# Shape Manipulator
 
 ### To run the project, do the following:
 1. Open Tools -> Keyboard and Display MMIO Simulator and Connect to MIPS.
