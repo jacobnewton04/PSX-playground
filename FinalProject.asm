@@ -1,5 +1,5 @@
-# Interactive MIPS Graphics Program
-# Features: Change shapes (rectangle, circle, line) and colors
+# Interactive MIPS Graphics Program (Event-Driven)
+# Features: Change shapes (rectangle, circle, line) and colors, move shapes with arrow keys
 # 
 # Instructions:
 # 1. Connect the Bitmap Display tool (512x512, pixel size 1, base address 0x10010000)
@@ -10,6 +10,9 @@
 #    - 'c' = Circle  
 #    - 'l' = Line
 #    - '1' = Red, '2' = Green, '3' = Blue, '4' = Yellow, '5' = Magenta, '6' = Cyan
+#    - Arrow keys (w/a/s/d) = Move shape up/left/down/right
+#    - '+' or '=' = Scale shape up, '-' = Scale shape down
+# 5. Press q to quit the program
 
 .data
     base_addr:    .word 0x10040000    # Bitmap display base address (heap)
@@ -35,12 +38,18 @@
     line_x2:      .word 450
     line_y2:      .word 400
     
+    # Movement step size
+    move_step:    .word 10
+    
+    # Scale step size
+    scale_step:   .word 5
+    
     # Messages
     msg_rect:     .asciiz "Drawing Rectangle\n"
     msg_circle:   .asciiz "Drawing Circle\n"
     msg_line:     .asciiz "Drawing Line\n"
     msg_color:    .asciiz "Color changed\n"
-    msg_start:    .asciiz "Interactive Graphics - Press r/c/l for shapes, 1-6 for colors\n"
+    msg_start:    .asciiz "Interactive Graphics - Press r/c/l for shapes, 1-6 for colors, w/a/s/d to move, +/- to scale\n"
 
 .text
 .globl main
@@ -51,33 +60,18 @@ main:
     la $a0, msg_start
     syscall
     
-main_loop:
-    # Clear screen (fill with black)
+    # Initial draw
     jal clear_screen
+    jal draw_current_shape
     
-    # Draw current shape
-    lw $t0, current_shape
-    beq $t0, 0, draw_rect
-    beq $t0, 1, draw_circle
-    beq $t0, 2, draw_line
-    
-draw_rect:
-    jal draw_rectangle
-    j check_input
-    
-draw_circle:
-    jal draw_circle_shape
-    j check_input
-    
-draw_line:
-    jal draw_line_shape
-    
-check_input:
-    # Check for keyboard input
+input_loop:
+    # Wait for keyboard input
     li $t0, 0xffff0000        # Keyboard control register
+    
+wait_for_key:
     lw $t1, 0($t0)            # Read control register
     andi $t1, $t1, 0x0001     # Check if key pressed
-    beqz $t1, main_loop       # No key pressed, loop
+    beqz $t1, wait_for_key    # Keep waiting if no key pressed
     
     # Read the key
     lw $a0, 4($t0)            # Read from data register
@@ -104,16 +98,39 @@ check_input:
     li $t2, '6'
     beq $a0, $t2, set_cyan
     
-    j main_loop
+    # Check movement keys (w/a/s/d)
+    li $t2, 'w'
+    beq $a0, $t2, move_up
+    li $t2, 'a'
+    beq $a0, $t2, move_left
+    li $t2, 's'
+    beq $a0, $t2, move_down
+    li $t2, 'd'
+    beq $a0, $t2, move_right
+    
+    # Check scale keys (+/-)
+    li $t2, '+'
+    beq $a0, $t2, scale_up
+    li $t2, '='
+    beq $a0, $t2, scale_up
+    li $t2, '-'
+    beq $a0, $t2, scale_down
+    
+    li $t2, 'q'
+    beq $a0, $t2, exit
+    
+    # Unknown key handling - just return to waiting
+    j input_loop
 
-# Shape setters
 set_rect:
     li $t0, 0
     sw $t0, current_shape
     li $v0, 4
     la $a0, msg_rect
     syscall
-    j main_loop
+    jal clear_screen          #  Clear before redrawing
+    jal draw_current_shape    # Redraw with new shape
+    j input_loop              
 
 set_circle:
     li $t0, 1
@@ -121,7 +138,9 @@ set_circle:
     li $v0, 4
     la $a0, msg_circle
     syscall
-    j main_loop
+    jal clear_screen          
+    jal draw_current_shape    
+    j input_loop         
 
 set_line:
     li $t0, 2
@@ -129,16 +148,20 @@ set_line:
     li $v0, 4
     la $a0, msg_line
     syscall
-    j main_loop
+    jal clear_screen          
+    jal draw_current_shape    
+    j input_loop              
 
-# Color setters
+
 set_red:
     li $t0, 0x00FF0000
     sw $t0, current_color
     li $v0, 4
     la $a0, msg_color
     syscall
-    j main_loop
+    jal clear_screen          # Clear before redrawing
+    jal draw_current_shape    # Redraw with new color
+    j input_loop
 
 set_green:
     li $t0, 0x0000FF00
@@ -146,7 +169,9 @@ set_green:
     li $v0, 4
     la $a0, msg_color
     syscall
-    j main_loop
+    jal clear_screen          
+    jal draw_current_shape    
+    j input_loop              
 
 set_blue:
     li $t0, 0x000000FF
@@ -154,7 +179,9 @@ set_blue:
     li $v0, 4
     la $a0, msg_color
     syscall
-    j main_loop
+    jal clear_screen          
+    jal draw_current_shape    
+    j input_loop              
 
 set_yellow:
     li $t0, 0x00FFFF00
@@ -162,7 +189,9 @@ set_yellow:
     li $v0, 4
     la $a0, msg_color
     syscall
-    j main_loop
+    jal clear_screen          
+    jal draw_current_shape    
+    j input_loop              
 
 set_magenta:
     li $t0, 0x00FF00FF
@@ -170,7 +199,9 @@ set_magenta:
     li $v0, 4
     la $a0, msg_color
     syscall
-    j main_loop
+    jal clear_screen          
+    jal draw_current_shape    
+    j input_loop              
 
 set_cyan:
     li $t0, 0x0000FFFF
@@ -178,7 +209,328 @@ set_cyan:
     li $v0, 4
     la $a0, msg_color
     syscall
-    j main_loop
+    jal clear_screen          
+    jal draw_current_shape    
+    j input_loop             
+
+# Movement functions
+move_up:
+    lw $t0, current_shape
+    lw $t1, move_step
+    
+    beq $t0, 0, move_up_rect
+    beq $t0, 1, move_up_circle
+    beq $t0, 2, move_up_line
+    
+move_up_rect:
+    lw $t2, rect_y
+    sub $t2, $t2, $t1
+    sw $t2, rect_y
+    j redraw_after_move
+    
+move_up_circle:
+    lw $t2, circle_cy
+    sub $t2, $t2, $t1
+    sw $t2, circle_cy
+    j redraw_after_move
+    
+move_up_line:
+    lw $t2, line_y1
+    sub $t2, $t2, $t1
+    sw $t2, line_y1
+    lw $t2, line_y2
+    sub $t2, $t2, $t1
+    sw $t2, line_y2
+    j redraw_after_move
+
+move_down:
+    lw $t0, current_shape
+    lw $t1, move_step
+    
+    beq $t0, 0, move_down_rect
+    beq $t0, 1, move_down_circle
+    beq $t0, 2, move_down_line
+    
+move_down_rect:
+    lw $t2, rect_y
+    add $t2, $t2, $t1
+    sw $t2, rect_y
+    j redraw_after_move
+    
+move_down_circle:
+    lw $t2, circle_cy
+    add $t2, $t2, $t1
+    sw $t2, circle_cy
+    j redraw_after_move
+    
+move_down_line:
+    lw $t2, line_y1
+    add $t2, $t2, $t1
+    sw $t2, line_y1
+    lw $t2, line_y2
+    add $t2, $t2, $t1
+    sw $t2, line_y2
+    j redraw_after_move
+
+move_left:
+    lw $t0, current_shape
+    lw $t1, move_step
+    
+    beq $t0, 0, move_left_rect
+    beq $t0, 1, move_left_circle
+    beq $t0, 2, move_left_line
+    
+move_left_rect:
+    lw $t2, rect_x
+    sub $t2, $t2, $t1
+    sw $t2, rect_x
+    j redraw_after_move
+    
+move_left_circle:
+    lw $t2, circle_cx
+    sub $t2, $t2, $t1
+    sw $t2, circle_cx
+    j redraw_after_move
+    
+move_left_line:
+    lw $t2, line_x1
+    sub $t2, $t2, $t1
+    sw $t2, line_x1
+    lw $t2, line_x2
+    sub $t2, $t2, $t1
+    sw $t2, line_x2
+    j redraw_after_move
+
+move_right:
+    lw $t0, current_shape
+    lw $t1, move_step
+    
+    beq $t0, 0, move_right_rect
+    beq $t0, 1, move_right_circle
+    beq $t0, 2, move_right_line
+    
+move_right_rect:
+    lw $t2, rect_x
+    add $t2, $t2, $t1
+    sw $t2, rect_x
+    j redraw_after_move
+    
+move_right_circle:
+    lw $t2, circle_cx
+    add $t2, $t2, $t1
+    sw $t2, circle_cx
+    j redraw_after_move
+    
+move_right_line:
+    lw $t2, line_x1
+    add $t2, $t2, $t1
+    sw $t2, line_x1
+    lw $t2, line_x2
+    add $t2, $t2, $t1
+    sw $t2, line_x2
+    j redraw_after_move
+
+redraw_after_move:
+    jal clear_screen
+    jal draw_current_shape
+    j input_loop
+
+# Scale functions - increase or decrease shape size
+scale_up:
+    lw $t0, current_shape
+    lw $t1, scale_step
+    
+    beq $t0, 0, scale_up_rect
+    beq $t0, 1, scale_up_circle
+    beq $t0, 2, scale_up_line
+    
+scale_up_rect:
+    # Increase rectangle width and height
+    lw $t2, rect_w
+    add $t2, $t2, $t1
+    sw $t2, rect_w
+    lw $t2, rect_h
+    add $t2, $t2, $t1
+    sw $t2, rect_h
+    j redraw_after_scale
+    
+scale_up_circle:
+    # Increase circle radius
+    lw $t2, circle_r
+    add $t2, $t2, $t1
+    sw $t2, circle_r
+    j redraw_after_scale
+    
+scale_up_line:
+    # Scale line by moving endpoints away from center
+    # Calculate center x: (x1 + x2) / 2
+    lw $t2, line_x1
+    lw $t3, line_x2
+    add $t4, $t2, $t3
+    srl $t4, $t4, 1           # center_x
+    
+    # Move x1 away from center
+    blt $t2, $t4, scale_up_line_x1_left
+    add $t2, $t2, $t1         # x1 on right, move right
+    sw $t2, line_x1
+    j scale_up_line_x2
+scale_up_line_x1_left:
+    sub $t2, $t2, $t1         # x1 on left, move left
+    sw $t2, line_x1
+    
+scale_up_line_x2:
+    # Move x2 away from center
+    blt $t3, $t4, scale_up_line_x2_left
+    add $t3, $t3, $t1         # x2 on right, move right
+    sw $t3, line_x2
+    j scale_up_line_y
+scale_up_line_x2_left:
+    sub $t3, $t3, $t1         # x2 on left, move left
+    sw $t3, line_x2
+    
+scale_up_line_y:
+    # Calculate center y: (y1 + y2) / 2
+    lw $t2, line_y1
+    lw $t3, line_y2
+    add $t4, $t2, $t3
+    srl $t4, $t4, 1           # center_y
+    
+    # Move y1 away from center
+    blt $t2, $t4, scale_up_line_y1_top
+    add $t2, $t2, $t1         # y1 on bottom, move down
+    sw $t2, line_y1
+    j scale_up_line_y2
+scale_up_line_y1_top:
+    sub $t2, $t2, $t1         # y1 on top, move up
+    sw $t2, line_y1
+    
+scale_up_line_y2:
+    # Move y2 away from center
+    blt $t3, $t4, scale_up_line_y2_top
+    add $t3, $t3, $t1         # y2 on bottom, move down
+    sw $t3, line_y2
+    j redraw_after_scale
+scale_up_line_y2_top:
+    sub $t3, $t3, $t1         # y2 on top, move up
+    sw $t3, line_y2
+    j redraw_after_scale
+
+scale_down:
+    lw $t0, current_shape
+    lw $t1, scale_step
+    
+    beq $t0, 0, scale_down_rect
+    beq $t0, 1, scale_down_circle
+    beq $t0, 2, scale_down_line
+    
+scale_down_rect:
+    # Decrease rectangle width and height
+    lw $t2, rect_w
+    sub $t2, $t2, $t1
+    blez $t2, scale_down_skip # Prevent negative width
+    sw $t2, rect_w
+    lw $t2, rect_h
+    sub $t2, $t2, $t1
+    blez $t2, scale_down_skip # Prevent negative height
+    sw $t2, rect_h
+    j redraw_after_scale
+    
+scale_down_circle:
+    # Decrease circle radius
+    lw $t2, circle_r
+    sub $t2, $t2, $t1
+    blez $t2, scale_down_skip # Prevent negative radius
+    sw $t2, circle_r
+    j redraw_after_scale
+    
+scale_down_line:
+    # Scale line by moving endpoints toward center
+    # Calculate center x: (x1 + x2) / 2
+    lw $t2, line_x1
+    lw $t3, line_x2
+    add $t4, $t2, $t3
+    srl $t4, $t4, 1           # center_x
+    
+    # Move x1 toward center
+    blt $t2, $t4, scale_down_line_x1_left
+    sub $t2, $t2, $t1         # x1 on right, move left
+    sw $t2, line_x1
+    j scale_down_line_x2
+scale_down_line_x1_left:
+    add $t2, $t2, $t1         # x1 on left, move right
+    sw $t2, line_x1
+    
+scale_down_line_x2:
+    # Move x2 toward center
+    blt $t3, $t4, scale_down_line_x2_left
+    sub $t3, $t3, $t1         # x2 on right, move left
+    sw $t3, line_x2
+    j scale_down_line_y
+scale_down_line_x2_left:
+    add $t3, $t3, $t1         # x2 on left, move right
+    sw $t3, line_x2
+    
+scale_down_line_y:
+    # Calculate center y: (y1 + y2) / 2
+    lw $t2, line_y1
+    lw $t3, line_y2
+    add $t4, $t2, $t3
+    srl $t4, $t4, 1           # center_y
+    
+    # Move y1 toward center
+    blt $t2, $t4, scale_down_line_y1_top
+    sub $t2, $t2, $t1         # y1 on bottom, move up
+    sw $t2, line_y1
+    j scale_down_line_y2
+scale_down_line_y1_top:
+    add $t2, $t2, $t1         # y1 on top, move down
+    sw $t2, line_y1
+    
+scale_down_line_y2:
+    # Move y2 toward center
+    blt $t3, $t4, scale_down_line_y2_top
+    sub $t3, $t3, $t1         # y2 on bottom, move up
+    sw $t3, line_y2
+    j redraw_after_scale
+scale_down_line_y2_top:
+    add $t3, $t3, $t1         # y2 on top, move down
+    sw $t3, line_y2
+    j redraw_after_scale
+
+scale_down_skip:
+    # Skip scaling if it would make shape too small
+    j input_loop
+
+redraw_after_scale:
+    jal clear_screen
+    jal draw_current_shape
+    j input_loop
+
+# helper function to draw the current shape
+draw_current_shape:
+    addi $sp, $sp, -4
+    sw $ra, 0($sp)
+    
+    lw $t0, current_shape
+    beq $t0, 0, draw_rect_call
+    beq $t0, 1, draw_circle_call
+    beq $t0, 2, draw_line_call
+    
+draw_rect_call:
+    jal draw_rectangle
+    j draw_shape_done
+    
+draw_circle_call:
+    jal draw_circle_shape
+    j draw_shape_done
+    
+draw_line_call:
+    jal draw_line_shape
+    
+draw_shape_done:
+    lw $ra, 0($sp)
+    addi $sp, $sp, 4
+    jr $ra
 
 # Clear screen function
 clear_screen:
@@ -373,3 +725,8 @@ draw_pixel:
     add $t1, $t1, $t0         # + base address
     sw $a2, 0($t1)            # Store color
     jr $ra
+    
+exit:
+    jal clear_screen
+    li $v0, 10
+    syscall
